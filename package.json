@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint src/**/*.js",
+    "lint": "eslint .",
     "prepare": "husky"
   },
   "repository": {
@@ -24,6 +24,7 @@
   "homepage": "https://github.com/lynxBios/sprint-2-api-client#readme",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "eslint": "^10.10.0",
     "globals": "^17.12.0",
     "husky": "^9.1.7",
