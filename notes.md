@@ -16,6 +16,7 @@
 | F | not-an-email (невалидный формат, создан экспериментом) | 31 | 11 |
 
 Пароли в notes не храним.
+> **Внимание:** 16.10.2026 база Juice Shop была пересоздана (у товаров изменился `createdAt`, тестовые аккаунты пропали). `qa.playwright@test.com` зарегистрирован заново с прежним паролем; значения `UserId` и `bid` в таблице относятся к базе до 16.10 и устарели, актуальные уточнить при работе с корзиной (повторный логин). Остальные аккаунты из таблицы в новой базе отсутствуют.
 
 ---
 
@@ -23,8 +24,10 @@
 
 - Шаги flow «Open application» и «Dismiss Popups» API-запросов бизнес-логики не создают: закрытие баннеров ставит cookie `welcomebanner_status=dismiss` и `cookieconsent_status=dismiss` на стороне браузера. В API-тесты эти шаги не входят.
 - API разложено по двум префиксам: `/rest/...` (логин, поиск, корзина) и `/api/...` (регистрация, элементы корзины).
-- Аутентификация: заголовок `Authorization: Bearer <JWT>`. Браузер дополнительно отправляет тот же токен в cookie `token`. Какой из двух способов проверяет сервер — не проверено.
+- Аутентификация: заголовок `Authorization: Bearer <JWT>`. Браузер дополнительно отправляет тот же токен в cookie `token`. Эндпоинты корзины (`/api/BasketItems/`, `/rest/basket/{bid}`) требуют заголовок Authorization (без него `401`, проверено в Postman); логин, регистрация и поиск токена не требуют. Принимается ли токен, переданный только в cookie, не проверено.
 - Статусы, замеченные в разведке: `200` (логин, поиск, корзина, POST/PUT/GET BasketItems), `201 Created` (регистрация), `400` (ошибка валидации при регистрации), `401` (неверные данные логина), `500` (битый JSON в логине). Поведение статусов непоследовательное, в кейсах фиксируем фактический.
+- База данных контейнера может пересоздаваться: `id` товаров при этом сохраняются, а тестовые аккаунты, их `UserId` и `bid` пропадают. Тестовые данные (пользователи, корзины) нужно создавать в подготовке теста, а не рассчитывать на заранее заведённые.
+- HTML-страницы ошибок (`401`, `500`) содержат заголовок `OWASP Juice Shop (Express ^4.22.1)`: раскрывается фреймворк и диапазон версии. При `401` блок стека вызовов (`<ul id="stacktrace">`) пустой; при `500` на битый JSON в логине он заполнен путями к файлам сервера.
 
 ## Сквозная схема данных (откуда → куда)
 
@@ -134,7 +137,7 @@
 **Запрос**
 - Метод + URL: `GET /rest/products/search?q=`
 - Параметр: `q` (query-строка); при загрузке страницы пустой
-- Authorization в запросе браузера: да (`Bearer`); обязателен ли — не проверено
+- Authorization в запросе браузера: да (`Bearer`); обязателен ли для сервера: нет (проверено в Postman: запрос без токена вернул `200` и тот же результат, что с токеном)
 - Тело: нет (GET)
 
 **Ответ**
@@ -150,9 +153,18 @@
 - `description` содержит HTML-разметку.
 - При поиске `Apple Juice` в UI подгружалась картинка `pineapple_juice.png` (гипотеза: поиск по вхождению подстроки без учёта регистра; проверить на endpoint).
 
+**Эксперименты (проверено в Postman)**
+- `q=apple` (без токена и с токеном): `200 OK`, `Content-Type: application/json; charset=utf-8`, `data` = 3 товара: Apple Juice (id 1), Apple Pomace (id 24), Pineapple Juice (id 47). Поиск идёт по вхождению подстроки (`apple` внутри `Pineapple`), результаты в алфавитном порядке по названию
+- `q=APPLE`: тот же результат, регистр не важен
+- `q=monkeys`: найден Banana Juice (id 6), слово есть только в описании: сервер ищет не только по названию, но и по описанию
+- `q=zzzzzz`: `200 OK`, `{ "status": "success", "data": [] }`: для ненайденного товара возвращается пустой массив, а не `404`
+- `q=` (пустой): `200 OK`, возвращается весь каталог, 46 товаров (подтверждено 16.10.2026 после пересоздания базы)
+- `q='` (одинарная кавычка): `500 Internal Server Error`, `Content-Type: text/html; charset=utf-8`, тело — HTML-страница ошибки с заголовком `Error: SQLITE_ERROR: no such column: q`. Входное значение попадает в SQL-запрос и ломает его: потенциальный дефект высокого приоритета (признак возможной SQL-инъекции), сервер раскрывает тип СУБД и текст SQL-ошибки
+- `q=<script>`: `200 OK`, `{ "status": "success", "data": [] }`, значение в ответе не отражается
+- Временные метки (`createdAt`, `updatedAt`) товаров меняются при пересоздании базы, `id` и названия остаются
+
 **Не проверено (Postman)**
-- Обязательность токена
-- Непустой `q`: существующий товар, регистр, подстрока, несуществующий товар, спецсимволы, очень длинная строка
+- Очень длинная строка в `q`
 
 ---
 
@@ -179,12 +191,26 @@
 - В URL PUT стоит id строки корзины. Это тот же тип объекта-идентификатора, что `bid` в шаге 4: кандидат на проверку авторизации (чужая строка).
 - `BasketId` в ответе POST приходит строкой (`"6"`), в ответах GET и PUT числом (`6`); `ProductId` всегда числом.
 
-**Не проверено (Postman)**
-- Добавление без токена
-- `quantity` = 0, отрицательное, дробное, очень большое, не число
-- Несуществующий `ProductId`
-- Чужой `BasketId` в теле POST
-- PUT и GET для id строки из чужой корзины
+**Эксперименты (проверено в Postman, аккаунт A, с токеном)**
+- `POST /api/BasketItems/` с телом `{"ProductId": 1, "BasketId": "6", "quantity": 1}`: `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `id` = 9 (id строки корзины), `ProductId` = 1, `BasketId` = `"6"` (строка), `quantity` = 1, `createdAt`, `updatedAt`
+- `PUT /api/BasketItems/9` с телом `{"quantity": 3}`: `200 OK`, `data`: `ProductId` = 1, `BasketId` = 6 (число), `id` = 9, `quantity` = 3, `updatedAt` изменился, `createdAt` прежний
+- Расхождение типов подтверждено: `BasketId` в ответе POST — строка, в ответе PUT и в корзине — число
+- `POST /api/BasketItems/` без заголовка Authorization (тело валидное, `ProductId` 1, `BasketId` "6"): `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, тело — HTML-страница ошибки с заголовком `UnauthorizedError: No Authorization header was found`
+- `POST /api/BasketItems/` с токеном аккаунта B в свою корзину (`ProductId` 24, `BasketId` "7"): `200 OK`, `data.id` = 10
+- `POST /api/BasketItems/` с токеном аккаунта A в чужую корзину (`ProductId` 1, `BasketId` "7"): `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, тело `{'error' : 'Invalid BasketId'}` (одинарные кавычки, это не валидный JSON). Запись в чужую корзину сервер отклоняет, статус `401` вместо более точного `403`; повторное чтение корзины B подтвердило, что товар не добавился (в Products остался только Apple Pomace, id 24)
+- `PUT /api/BasketItems/10` (строка корзины B) с токеном аккаунта A, тело `{"quantity": 5}`: `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `ProductId` = 24, `BasketId` = 7, `id` = 10, `quantity` = 5, `updatedAt` изменился. Чтение корзины B подтвердило `quantity` = 5 (было 1). Сервер не проверяет принадлежность строки корзины владельцу токена (потенциальный дефект: изменение чужих данных)
+- `POST /api/BasketItems/` с несуществующим товаром (`ProductId` 99999, `BasketId` "6", `quantity` 1, токен A): `500 Internal Server Error`, `Content-Type: text/html; charset=utf-8`, HTML-страница, `<h2>` содержит `500 Error: No such product found!`, в блоке стека путь `/juice-shop/build/routes/basketItems.js:119:15` (функция `quantityCheck`)
+- `POST /api/BasketItems/` с `quantity` = -1 для товара, который уже лежит в корзине (`ProductId` 1, `BasketId` "6", токен A): `500 Internal Server Error`, `Content-Type: text/html; charset=utf-8`, HTML-страница с заголовком `Error`, в стеке вызовов видны пути к файлам сервера и библиотека `sequelize` (ошибка возникает при вставке записи в БД). Корзина не изменилась (`quantity` = 3). Причина `500` здесь не отрицательное количество, а повторная вставка уже существующего товара (см. две строки ниже)
+- `POST /api/BasketItems/` с `quantity` = -1 для нового товара (`ProductId` 2, `BasketId` "6", токен A): `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `id` = 11, `ProductId` = 2, `BasketId` = `"6"`, `quantity` = -1. Сервер принимает отрицательное количество и создаёт строку (потенциальный дефект)
+- `POST /api/BasketItems/` повторно для товара, который уже в корзине (`ProductId` 1, `BasketId` "6", `quantity` 1, токен A): `500 Internal Server Error`, `Content-Type: text/html; charset=utf-8`, HTML-страница с заголовком `Error`, в стеке вызовов пути к файлам сервера и `sequelize` (ошибка при вставке записи, `BasketItem.save`). Тот же результат, что в предыдущем эксперименте с `ProductId` 1
+- `POST /api/BasketItems/` с `quantity` = 0 для нового товара (`ProductId` 3, `BasketId` "6", токен A): `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `id` = 12, `ProductId` = 3, `BasketId` = `"6"`, `quantity` = 0. Строка создаётся; чтение корзины A подтвердило товар `id` 3 с `quantity` = 0 (потенциальный дефект: нет валидации количества)
+- `POST /api/BasketItems/` с `quantity` = `"abc"` (`ProductId` 4, `BasketId` "6", токен A): `400 Bad Request`, `Content-Type: application/json; charset=utf-8`, тело `{ "error": "We are out of stock! Sorry for the inconvenience." }`. Статус `400`, но сообщение вводит в заблуждение (про остатки, а не про неверный тип)
+- `POST /api/BasketItems/` с `quantity` = 1.5 (`ProductId` 5, `BasketId` "6", токен A): `200 OK`, `data.quantity` = 1.5. Дробное количество принимается
+- `POST /api/BasketItems/` с `quantity` = 999999 (`ProductId` 6, `BasketId` "6", токен A): `400 Bad Request`, `Content-Type: application/json; charset=utf-8`, тело `{ "error": "We are out of stock! Sorry for the inconvenience." }`. Для слишком большого количества отказ по остаткам, сообщение уместно
+- `GET /api/BasketItems/10` (строка корзины B) с токеном аккаунта A: `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `ProductId` = 24, `BasketId` = 7, `id` = 10, `quantity` = 5. Чужая строка читается токеном A
+- `GET /api/BasketItems/2` с токеном аккаунта A: `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `ProductId` = 2, `BasketId` = 1, `id` = 2, `quantity` = 3. Строка корзины 1 (не принадлежит A) тоже читается
+- `GET /api/BasketItems/9` с токеном аккаунта A (своя строка): `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `ProductId` = 1, `BasketId` = 6, `id` = 9, `quantity` = 3
+- `GET /api/BasketItems/10` без заголовка Authorization: `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, HTML-страница с заголовком `UnauthorizedError: No Authorization header was found`, блок стека пустой. Токен обязателен
 
 ---
 
@@ -211,10 +237,17 @@
 - В URL идёт id корзины (`bid`), а не `UserId` (в ответе `UserId: 25`, корзина: `6`).
 - Приложение перечитывает корзину после каждого добавления.
 
+**Эксперименты (проверено в Postman, аккаунт A, с токеном)**
+- `GET /rest/basket/6` после добавления товара: `200 OK`, `data.id` = 6, `data.UserId` = 25, `data.coupon` = `null`, `data.Products` = 1 товар (Apple Juice, `id` 1) с вложенным `BasketItem`: `ProductId` = 1, `BasketId` = 6, `id` = 9 (совпадает с `data.id` из ответа POST), `quantity` = 1
+- `GET /rest/basket/6` после `PUT quantity = 3`: тот же товар, `BasketItem.quantity` = 3, `BasketItem.updatedAt` обновился
+- `GET /rest/basket/6` без заголовка Authorization: `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, тело — HTML-страница ошибки с заголовком `UnauthorizedError: No Authorization header was found`
+- `GET /rest/basket/7` (корзина аккаунта B) с токеном аккаунта A: `200 OK`, `Content-Type: application/json; charset=utf-8`, в ответе вся корзина B: `data.id` = 7, `data.UserId` = 26, `data.Products` = Apple Pomace (`id` 24), `BasketItem.id` = 10, `quantity` = 1. Сервер не проверяет, что корзина принадлежит владельцу токена (потенциальный дефект: чтение чужой корзины)
+- `GET /rest/basket/99999` (несуществующая корзина) с токеном аккаунта A: `200 OK`, `Content-Type: application/json; charset=utf-8`, тело `{ "status": "success", "data": null }`. Статус `404` не возвращается
+- `GET /rest/basket/6` (токен A) после экспериментов с `quantity` -1 и повторным POST: `200 OK`, `Content-Type: application/json; charset=utf-8`, в `Products` два товара: Apple Juice (`id` 1), `BasketItem` `id` 9, `quantity` = 3 (не изменился после `500` на повторном POST); Orange Juice (`id` 2), `BasketItem` `id` 11, `quantity` = -1 (строка с отрицательным количеством сохранилась и отдаётся в корзине)
+
 **Не проверено (Postman)**
-- Доступ без токена, с испорченным токеном
-- Доступ к корзине аккаунта B (`bid = 7`) с токеном аккаунта A
-- Несуществующий id корзины, нечисловой id
+- Испорченный токен; токен только в cookie (без заголовка Authorization)
+- Нечисловой id корзины
 
 ---
 
@@ -228,6 +261,18 @@
 6. Некорректный JSON в запросе логина приводит к `500 Internal Server Error` и HTML-странице со стеком вызовов: пути к файлам сервера, используемые библиотеки (ожидаемо `400` без технических деталей).
 7. Регистрация принимает несовпадающие `password` и `passwordRepeat` (`201 Created`, пользователь создан и может войти с `password`; `passwordRepeat` игнорируется): сервер не валидирует повтор пароля. Воспроизведено на двух наборах данных.
 8. Регистрация принимает email без `@` (`not-an-email`): `201 Created`, пользователь создан и может войти. Формат email сервером не проверяется.
+9. Поиск `GET /rest/products/search?q='` возвращает `500` с текстом SQL-ошибки (`SQLITE_ERROR: no such column: q`): входное значение, вероятно, подставляется в SQL-запрос без защиты. Признак возможной SQL-инъекции, раскрывается тип СУБД.
+10. HTML-страницы ошибок раскрывают название фреймворка и диапазон версии (`Express ^4.22.1`). Серьёзность низкая.
+11. Чтение чужой корзины: `GET /rest/basket/{bid}` с токеном аккаунта A возвращает `200` и полное содержимое корзины аккаунта B (`UserId`, товары, количества). Сервер проверяет наличие токена, но не принадлежность корзины владельцу токена (Broken Object Level Authorization). Серьёзность высокая. При этом запись в чужую корзину через `POST /api/BasketItems/` сервер отклоняет (`401`, `Invalid BasketId`).
+12. Изменение чужих данных: `PUT /api/BasketItems/{id}` с токеном аккаунта A для строки из корзины аккаунта B возвращает `200` и меняет `quantity` (подтверждено чтением корзины B). Принадлежность строки владельцу токена не проверяется. Серьёзность высокая. Защита непоследовательна: `POST` в чужую корзину отклоняется, `PUT` по чужой строке проходит.
+13. Запрос несуществующей корзины (`GET /rest/basket/99999`) возвращает `200` с `data: null` вместо `404`.
+14. Добавление несуществующего товара (`POST /api/BasketItems/`, `ProductId` 99999) возвращает `500` и HTML-страницу со стеком (путь `/juice-shop/build/routes/basketItems.js`) вместо `404` или `400`.
+15. Добавление в корзину с отрицательным количеством (`POST /api/BasketItems/`, `quantity` -1) возвращает `200`, строка создаётся. Валидация количества отсутствует.
+16. Повторное добавление уже лежащего в корзине товара через `POST /api/BasketItems/` возвращает `500` и страницу ошибки со стеком (`sequelize`, пути к файлам сервера) вместо понятного отказа или увеличения количества.
+17. Добавление с `quantity` = 0 (`POST /api/BasketItems/`) возвращает `200`, строка с нулевым количеством создаётся и отдаётся в корзине.
+18. Нечисловое `quantity` (`"abc"`) даёт `400`, но с вводящим в заблуждение сообщением «We are out of stock!» вместо указания на неверный тип данных.
+19. Дробное количество (`quantity` 1.5) принимается: `200`, `data.quantity` = 1.5.
+20. Чтение чужой строки корзины: `GET /api/BasketItems/{id}` с токеном аккаунта A возвращает `200` и данные строки из корзины B (`id` 10) и из корзины 1 (`id` 2). Принадлежность строки владельцу токена не проверяется. Серьёзность высокая. Вместе с пунктами 11 и 12 это общий пробел: защита сводится к проверке наличия токена, а `POST` в чужую корзину отклоняется.
 
 ## Сводный список проверок для Postman
 
