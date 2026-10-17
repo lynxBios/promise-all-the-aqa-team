@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "lint": "eslint .",
-    "prepare": "husky"
+  "test": "playwright test",
+  "format": "prettier --write .",
+  "format:check": "prettier --check .",
+  "lint": "eslint src/**/*.js",
+  "prepare": "husky"
   },
   "repository": {
     "type": "git",
