@@ -1,8 +1,19 @@
 import { BASE_URL } from '../../config/testData.js';
+import { HTTP_STATUS } from '../../config/apiConstants.js';
 
 const BASKET_PATH = '/rest/basket';
 const BASKET_ITEMS_PATH = '/api/BasketItems/';
 const ERROR_BODY_MAX_LENGTH = 200;
+const ERROR_HEADING_PATTERN = /<h2>(.*?)<\/h2>/s;
+const HTML_TAG_PATTERN = /<[^>]+>/g;
+
+function summarizeErrorBody(body) {
+  const heading = ERROR_HEADING_PATTERN.exec(body);
+  const summary = heading
+    ? heading[1].replace(HTML_TAG_PATTERN, '').trim()
+    : body;
+  return summary.slice(0, ERROR_BODY_MAX_LENGTH);
+}
 
 function requireBaseUrl() {
   if (!BASE_URL) {
@@ -56,7 +67,7 @@ export async function addToBasket(token, item) {
   const response = await addToBasketRequest(token, item);
 
   if (!response.ok) {
-    const errorBody = (await response.text()).slice(0, ERROR_BODY_MAX_LENGTH);
+    const errorBody = summarizeErrorBody(await response.text());
     const err = new Error(
       `Add to basket failed: HTTP ${response.status} ${errorBody}`,
     );
@@ -65,4 +76,39 @@ export async function addToBasket(token, item) {
   }
 
   return (await response.json()).data;
+}
+
+/**
+ * Sends a raw request to delete a basket item and returns the response unchecked.
+ * @param {string | undefined} token - JWT; if omitted, no Authorization header is sent.
+ * @param {number | string} itemId - Basket item id (data.id from the add-to-basket response).
+ * @returns {Promise<Response>} Raw fetch response.
+ */
+export async function deleteBasketItemRequest(token, itemId) {
+  return fetch(`${requireBaseUrl()}${BASKET_ITEMS_PATH}${itemId}`, {
+    method: 'DELETE',
+    headers: buildHeaders(token),
+  });
+}
+
+/**
+ * Removes a basket item for test cleanup. A missing item (404) counts as already removed.
+ * @param {string} token - JWT.
+ * @param {number | string} itemId - Basket item id.
+ * @returns {Promise<void>}
+ * @throws {Error} For any other unsuccessful status.
+ */
+export async function removeBasketItem(token, itemId) {
+  const response = await deleteBasketItemRequest(token, itemId);
+
+  if (response.ok || response.status === HTTP_STATUS.NOT_FOUND) {
+    return;
+  }
+
+  const errorBody = summarizeErrorBody(await response.text());
+  const err = new Error(
+    `Remove basket item failed: HTTP ${response.status} ${errorBody}`,
+  );
+  err.status = response.status;
+  throw err;
 }
