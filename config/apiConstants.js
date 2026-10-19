@@ -10,3 +10,4 @@ export const CONTENT_TYPE = {
 };
 
 export const CONTENT_TYPE_HEADER = 'content-type';
+export const RESPONSE_STATUS_SUCCESS = 'success';

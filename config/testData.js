@@ -10,3 +10,5 @@ export const TEST_USER_B = {
 
 export const BASE_URL = process.env.JUICE_SHOP_URL;
 export const INVALID_PASSWORD = 'wrong-password';
+export const APPLE_JUICE_ID = 1;
+export const DEFAULT_QUANTITY = 1;
