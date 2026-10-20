@@ -10,6 +10,11 @@ export const CONTENT_TYPE = {
   HTML: 'text/html',
 };
 
+export const PAGINATION = {
+  FIRST_PAGE: 1,
+  MAX_PAGES: 10,
+};
+
 export const USERS_ENDPOINT = '/api/Users/';
 export const SEARCH_ENDPOINT = '/rest/products/search';
 export const CONTENT_TYPE_HEADER = 'content-type';

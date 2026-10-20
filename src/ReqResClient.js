@@ -58,6 +58,26 @@ export class ReqResClient {
   }
 
   /**
+   * Retrieves one page of users.
+   * @param {number} page - Page number, starting from 1.
+   * @returns {Promise<object>} Page payload with data, total and total_pages.
+   */
+  async getUsers(page) {
+    if (!Number.isInteger(page) || page <= 0) {
+      throw new Error('Page must be a positive integer');
+    }
+
+    const endpoint = `/api/users?page=${page}`;
+    const options = {
+      headers: {
+        'x-api-key': this.apiKey,
+      },
+    };
+
+    return this._request(endpoint, options);
+  }
+
+  /**
    * Creates a new user.
    * @param {object} userData - User data to create.
    * @returns {Promise<object>} Created user data.
