@@ -9,5 +9,7 @@ export const CONTENT_TYPE = {
   HTML: 'text/html',
 };
 
+export const USERS_ENDPOINT = '/api/Users/';
 export const CONTENT_TYPE_HEADER = 'content-type';
 export const RESPONSE_STATUS_SUCCESS = 'success';
+export const ERROR_BODY_MAX_LENGTH = 200;

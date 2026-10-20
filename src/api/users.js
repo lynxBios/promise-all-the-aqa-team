@@ -1,22 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import {
-  BASE_URL,
   USERS_ENDPOINT,
   CONTENT_TYPE,
   CONTENT_TYPE_HEADER,
-  ERROR_BODY_MAX_LENGTH,
 } from '../../config/apiConstants.js';
 import {
+  BASE_URL,
   NEW_USER_EMAIL_PREFIX,
   NEW_USER_EMAIL_DOMAIN,
   NEW_USER_PASSWORD_PREFIX,
   SECURITY_QUESTION,
   SECURITY_ANSWER,
 } from '../../config/testData.js';
+import { summarizeErrorBody } from './errors.js';
 
 /**
  * Builds unique credentials for a new test user.
- * @returns {{email: string, password: string}}
+ * @returns {{email: string, password: string}} Email and password that are unique per call.
  */
 export function buildUniqueCredentials() {
   const id = randomUUID();
@@ -27,11 +27,15 @@ export function buildUniqueCredentials() {
 }
 
 /**
- * Sends the registration request and returns the raw Response (for negative tests).
- * @param {{email: string, password: string}} credentials
- * @returns {Promise<Response>}
+ * Sends a raw registration request and returns the response without checking it.
+ * @param {{email: string, password: string}} credentials - User credentials.
+ * @returns {Promise<Response>} Raw fetch response.
  */
-export function registerUserRequest({ email, password }) {
+export async function registerUserRequest({ email, password }) {
+  if (!BASE_URL) {
+    throw new Error('JUICE_SHOP_URL is not set in .env');
+  }
+
   return fetch(`${BASE_URL}${USERS_ENDPOINT}`, {
     method: 'POST',
     headers: { [CONTENT_TYPE_HEADER]: CONTENT_TYPE.JSON },
@@ -46,20 +50,30 @@ export function registerUserRequest({ email, password }) {
 }
 
 /**
- * Registers a user and throws if the server does not accept it.
- * @param {{email: string, password: string}} [credentials] unique credentials by default
- * @returns {Promise<{id: number, email: string, password: string}>}
+ * Registers a new user and returns its credentials.
+ * @param {{email: string, password: string}} [credentials] - Unique credentials by default.
+ * @returns {Promise<{id: number, email: string, password: string}>} Created user.
+ * @throws {Error} If the server rejects the registration.
  */
 export async function registerUser(credentials = buildUniqueCredentials()) {
+  if (
+    typeof credentials?.email !== 'string' ||
+    typeof credentials?.password !== 'string'
+  ) {
+    throw new TypeError('registerUser expects { email, password } strings');
+  }
+
   const response = await registerUserRequest(credentials);
+
   if (!response.ok) {
-    const text = await response.text();
+    const errorBody = await response.text();
     const err = new Error(
-      `Registration failed: HTTP ${response.status}: ${text.slice(0, ERROR_BODY_MAX_LENGTH)}`,
+      `Registration failed: HTTP ${response.status} ${summarizeErrorBody(errorBody)}`,
     );
     err.status = response.status;
     throw err;
   }
+
   const body = await response.json();
   return { id: body.data.id, ...credentials };
 }

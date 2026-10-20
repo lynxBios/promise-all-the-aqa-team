@@ -1,19 +1,9 @@
 import { BASE_URL } from '../../config/testData.js';
 import { HTTP_STATUS } from '../../config/apiConstants.js';
+import { summarizeErrorBody } from './errors.js';
 
 const BASKET_PATH = '/rest/basket';
 const BASKET_ITEMS_PATH = '/api/BasketItems/';
-const ERROR_BODY_MAX_LENGTH = 200;
-const ERROR_HEADING_PATTERN = /<h2>(.*?)<\/h2>/s;
-const HTML_TAG_PATTERN = /<[^>]+>/g;
-
-function summarizeErrorBody(body) {
-  const heading = ERROR_HEADING_PATTERN.exec(body);
-  const summary = heading
-    ? heading[1].replace(HTML_TAG_PATTERN, '').trim()
-    : body;
-  return summary.slice(0, ERROR_BODY_MAX_LENGTH);
-}
 
 function requireBaseUrl() {
   if (!BASE_URL) {
