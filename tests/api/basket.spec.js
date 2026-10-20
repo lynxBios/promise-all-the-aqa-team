@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { registerUser } from '../../src/api/users.js';
 import { login } from '../../src/api/auth.js';
 import {
   getBasket,
@@ -42,7 +43,8 @@ test.describe('own basket', () => {
   let itemId;
 
   test.beforeEach(async () => {
-    ({ token, bid } = await login(TEST_USER.email, TEST_USER.password));
+    const user = await registerUser();
+    ({ token, bid } = await login(user.email, user.password));
     itemId = undefined;
   });
 
