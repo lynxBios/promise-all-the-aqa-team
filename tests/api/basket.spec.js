@@ -5,13 +5,16 @@ import { searchProducts } from '../../src/api/products.js';
 import {
   getBasket,
   addToBasket,
+  addToBasketRequest,
   removeBasketItem,
 } from '../../src/api/basket.js';
 import {
   TEST_USER,
   TEST_USER_B,
   APPLE_JUICE_ID,
+  ORANGE_JUICE_ID,
   APPLE_POMACE_ID,
+  NON_EXISTENT_PRODUCT_ID,
   DEFAULT_QUANTITY,
   APPLE_SEARCH_QUERY,
   APPLE_JUICE_NAME,
@@ -187,4 +190,49 @@ test.describe('end-to-end flow', () => {
     expect(product).toBeDefined();
     expect(product.BasketItem.quantity).toBe(DEFAULT_QUANTITY);
   });
+});
+
+async function createFreshSession() {
+  const { email, password } = await registerUser();
+  return login(email, password);
+}
+
+test('TC-021: add to basket without Authorization returns 401', async () => {
+  const { bid } = await createFreshSession();
+
+  const response = await addToBasketRequest(null, {
+    ProductId: APPLE_JUICE_ID,
+    BasketId: String(bid),
+    quantity: DEFAULT_QUANTITY,
+  });
+
+  expect(response.status).toBe(HTTP_STATUS.UNAUTHORIZED);
+});
+
+test('TC-023: add non-existent product - actual behavior is 500 (finding)', async () => {
+  const { token, bid } = await createFreshSession();
+
+  const response = await addToBasketRequest(token, {
+    ProductId: NON_EXISTENT_PRODUCT_ID,
+    BasketId: String(bid),
+    quantity: DEFAULT_QUANTITY,
+  });
+
+  // Expected 400/404, server actually returns 500 (see notes.md defect #14)
+  expect(response.status).toBe(HTTP_STATUS.INTERNAL_SERVER_ERROR);
+});
+
+test('TC-024: add product with negative quantity - actual behavior is 200 (finding)', async () => {
+  const { token, bid } = await createFreshSession();
+
+  const response = await addToBasketRequest(token, {
+    ProductId: ORANGE_JUICE_ID,
+    BasketId: String(bid),
+    quantity: -1,
+  });
+  const body = await response.json();
+
+  // Expected 400, server actually accepts it (see notes.md defect #15)
+  expect(response.status).toBe(HTTP_STATUS.OK);
+  expect(body.data.quantity).toBe(-1);
 });
