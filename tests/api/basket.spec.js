@@ -189,6 +189,11 @@ test.describe('end-to-end flow', () => {
     );
     expect(product).toBeDefined();
     expect(product.BasketItem.quantity).toBe(DEFAULT_QUANTITY);
+    expect(typeof basketAfter.data.UserId).toBe('number');
+    expect(typeof product.name).toBe('string');
+    expect(typeof product.price).toBe('number');
+    expect(product.BasketItem.id).toBe(itemId);
+    expect(product.BasketItem.BasketId).toBe(auth.bid);
   });
 });
 

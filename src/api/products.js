@@ -19,7 +19,7 @@ export async function searchProductsRequest(query) {
 /**
  * Searches products and returns the list of matches.
  * @param {string} query - Search string for the q parameter.
- * @returns {Promise<Array<{id: number, name: string}>>} Matching products.
+ * @returns {Promise<Array<{id: number, name: string, price: number}>>} Matching products.
  * @throws {Error} If the server rejects the request.
  */
 export async function searchProducts(query) {
