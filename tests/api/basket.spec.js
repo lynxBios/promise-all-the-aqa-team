@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { registerUser } from '../../src/api/users.js';
 import { login } from '../../src/api/auth.js';
+import { searchProducts } from '../../src/api/products.js';
 import {
   getBasket,
   addToBasket,
@@ -12,6 +13,8 @@ import {
   APPLE_JUICE_ID,
   APPLE_POMACE_ID,
   DEFAULT_QUANTITY,
+  APPLE_SEARCH_QUERY,
+  APPLE_JUICE_NAME,
 } from '../../config/testData.js';
 import {
   HTTP_STATUS,
@@ -122,5 +125,66 @@ test.describe("another user's basket", () => {
     expect(body.data.id).toBe(bidB);
     expect(body.data.UserId).toBe(ownerBody.data.UserId);
     expect(body.data.Products.map((p) => p.id)).toContain(APPLE_POMACE_ID);
+  });
+});
+
+test.describe('end-to-end flow', () => {
+  let user;
+  let token;
+  let itemId;
+
+  test.beforeEach(async () => {
+    user = await registerUser();
+    token = undefined;
+    itemId = undefined;
+  });
+
+  test.afterEach(async () => {
+    if (token && itemId) {
+      await removeBasketItem(token, itemId);
+    }
+  });
+
+  test('TC-029: login, search, add to basket, verify basket', async () => {
+    const auth = await login(user.email, user.password);
+    token = auth.token;
+    expect(typeof auth.token).toBe('string');
+    expect(auth.token).not.toBe('');
+    expect(typeof auth.bid).toBe('number');
+
+    const products = await searchProducts(APPLE_SEARCH_QUERY);
+    const appleJuice = products.find((p) =>
+      p.name.startsWith(APPLE_JUICE_NAME),
+    );
+    expect(appleJuice).toBeDefined();
+    expect(typeof appleJuice.id).toBe('number');
+
+    const basketBefore = await (await getBasket(token, auth.bid)).json();
+
+    const item = await addToBasket(token, {
+      ProductId: appleJuice.id,
+      BasketId: String(auth.bid),
+      quantity: DEFAULT_QUANTITY,
+    });
+    itemId = item.id;
+    expect(typeof item.id).toBe('number');
+    expect(item.ProductId).toBe(appleJuice.id);
+    expect(item.BasketId).toBe(String(auth.bid));
+    expect(item.quantity).toBe(DEFAULT_QUANTITY);
+
+    const response = await getBasket(token, auth.bid);
+    const basketAfter = await response.json();
+
+    expect(response.status).toBe(HTTP_STATUS.OK);
+    expect(basketAfter.data.id).toBe(auth.bid);
+    expect(basketAfter.data.Products.length).toBe(
+      basketBefore.data.Products.length + 1,
+    );
+
+    const product = basketAfter.data.Products.find(
+      (p) => p.id === appleJuice.id,
+    );
+    expect(product).toBeDefined();
+    expect(product.BasketItem.quantity).toBe(DEFAULT_QUANTITY);
   });
 });
