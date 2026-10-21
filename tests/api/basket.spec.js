@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test';
 import { registerUser } from '../../src/api/users.js';
 import { login } from '../../src/api/auth.js';
 import { searchProducts } from '../../src/api/products.js';
+import { validateSchema } from '../../src/utils/schemaValidator.js';
+import {
+  ADDED_BASKET_ITEM_SCHEMA,
+  BASKET_RESPONSE_SCHEMA,
+} from '../../src/api/schemas.js';
 import {
   getBasket,
   addToBasket,
@@ -170,7 +175,9 @@ test.describe('end-to-end flow', () => {
       quantity: DEFAULT_QUANTITY,
     });
     itemId = item.id;
-    expect(typeof item.id).toBe('number');
+
+    const itemCheck = validateSchema(ADDED_BASKET_ITEM_SCHEMA, item);
+    expect(itemCheck.valid, itemCheck.errors).toBe(true);
     expect(item.ProductId).toBe(appleJuice.id);
     expect(item.BasketId).toBe(String(auth.bid));
     expect(item.quantity).toBe(DEFAULT_QUANTITY);
@@ -179,6 +186,9 @@ test.describe('end-to-end flow', () => {
     const basketAfter = await response.json();
 
     expect(response.status).toBe(HTTP_STATUS.OK);
+    const basketCheck = validateSchema(BASKET_RESPONSE_SCHEMA, basketAfter);
+    expect(basketCheck.valid, basketCheck.errors).toBe(true);
+
     expect(basketAfter.data.id).toBe(auth.bid);
     expect(basketAfter.data.Products.length).toBe(
       basketBefore.data.Products.length + 1,
@@ -189,9 +199,6 @@ test.describe('end-to-end flow', () => {
     );
     expect(product).toBeDefined();
     expect(product.BasketItem.quantity).toBe(DEFAULT_QUANTITY);
-    expect(typeof basketAfter.data.UserId).toBe('number');
-    expect(typeof product.name).toBe('string');
-    expect(typeof product.price).toBe('number');
     expect(product.BasketItem.id).toBe(itemId);
     expect(product.BasketItem.BasketId).toBe(auth.bid);
   });

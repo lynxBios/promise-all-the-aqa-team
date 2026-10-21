@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { loginRequest } from '../../src/api/auth.js';
 import { TEST_USER, INVALID_PASSWORD } from '../../config/testData.js';
+import { validateSchema } from '../../src/utils/schemaValidator.js';
+import { LOGIN_RESPONSE_SCHEMA } from '../../src/api/schemas.js';
 import {
   HTTP_STATUS,
   CONTENT_TYPE,
@@ -17,12 +19,13 @@ test('TC-001: login with valid credentials returns token, bid and umail', async 
     CONTENT_TYPE.JSON,
   );
 
-  const { token, bid, umail } = (await response.json()).authentication;
+  const body = await response.json();
+  const { valid, errors } = validateSchema(LOGIN_RESPONSE_SCHEMA, body);
+  expect(valid, errors).toBe(true);
 
-  expect(typeof token).toBe('string');
+  const { token, umail } = body.authentication;
   expect(token.split('.')).toHaveLength(JWT_PARTS_COUNT);
   expect(umail).toBe(TEST_USER.email);
-  expect(typeof bid).toBe('number');
 });
 
 const INVALID_LOGIN_CASES = [

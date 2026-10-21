@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { searchProductsRequest } from '../../src/api/products.js';
+import { validateSchema } from '../../src/utils/schemaValidator.js';
+import { SEARCH_RESPONSE_SCHEMA } from '../../src/api/schemas.js';
 import {
   EMPTY_QUERY,
   NO_MATCH_QUERY,
@@ -23,19 +25,15 @@ test('TC-011: empty query returns the whole catalog', async () => {
   expect(response.headers.get(CONTENT_TYPE_HEADER)).toContain(
     CONTENT_TYPE.JSON,
   );
+
+  const { valid, errors } = validateSchema(SEARCH_RESPONSE_SCHEMA, body);
+
+  expect(valid, errors).toBe(true);
   expect(body.status).toBe(RESPONSE_STATUS_SUCCESS);
-  expect(Array.isArray(body.data)).toBe(true);
-  expect(body.data).toHaveLength(CATALOG_SIZE);
-
-  for (const product of body.data) {
-    expect(typeof product.id).toBe('number');
-    expect(typeof product.name).toBe('string');
-    expect(typeof product.price).toBe('number');
-  }
-
   expect(body.data).toHaveLength(CATALOG_SIZE);
 
   const ids = body.data.map((p) => p.id);
+
   expect(ids).toEqual(
     expect.arrayContaining([
       APPLE_JUICE_ID,
