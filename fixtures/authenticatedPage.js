@@ -1,5 +1,5 @@
 import { test as base, expect } from '@playwright/test';
-import { applicationSetup } from '../utils/applicationSetup.js';
+import { applicationSetup } from '../src/utils/applicationSetup.js';
 import { LoginPage } from '../pages/LoginPage.js';
 import { TEST_USER } from '../config/testData.js';
 
