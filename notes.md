@@ -6,10 +6,10 @@
 
 ## Тестовые аккаунты
 
-| Аккаунт | Email | UserId | bid (id корзины) |
-|---|---|---|---|
-| A | qa.playwright@test.com | 25 | 6 |
-| B | qa.second@test.com | 26 | 7 |
+| Аккаунт | Email                  | UserId | bid (id корзины) |
+| ------- | ---------------------- | ------ | ---------------- |
+| A       | qa.playwright@test.com | 25     | 6                |
+| B       | qa.second@test.com     | 26     | 7                |
 
 Пароли в notes не храним.
 
@@ -28,13 +28,13 @@
 
 ## Сквозная схема данных (откуда → куда)
 
-| Значение | Откуда берётся | Где используется |
-|---|---|---|
-| `token` | шаг 1, `authentication.token` | заголовок `Authorization: Bearer <token>` в шагах 3–4 |
-| `bid` | шаг 1, `authentication.bid` | URL `/rest/basket/{bid}` (шаг 4); поле `BasketId` в теле POST (шаг 3) |
-| id товара | шаг 2, `data[].id` | поле `ProductId` в теле POST (шаг 3) |
-| id строки корзины | шаг 3, `data.id` из ответа POST | URL `/api/BasketItems/{id}` (GET, PUT, DELETE) |
-| UserId нового пользователя | шаг 0, ответ `/api/Users/` (проверить: `data.id`) | тело `/api/SecurityAnswers/` |
+| Значение                   | Откуда берётся                                    | Где используется                                                      |
+| -------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| `token`                    | шаг 1, `authentication.token`                     | заголовок `Authorization: Bearer <token>` в шагах 3–4                 |
+| `bid`                      | шаг 1, `authentication.bid`                       | URL `/rest/basket/{bid}` (шаг 4); поле `BasketId` в теле POST (шаг 3) |
+| id товара                  | шаг 2, `data[].id`                                | поле `ProductId` в теле POST (шаг 3)                                  |
+| id строки корзины          | шаг 3, `data.id` из ответа POST                   | URL `/api/BasketItems/{id}` (GET, PUT, DELETE)                        |
+| UserId нового пользователя | шаг 0, ответ `/api/Users/` (проверить: `data.id`) | тело `/api/SecurityAnswers/`                                          |
 
 ---
 
@@ -45,6 +45,7 @@
 Регистрация состоит из двух запросов.
 
 ### 0а. Создание пользователя
+
 - Метод + URL: `POST /api/Users/`
 - Authorization в запросе: нет (регистрация выполнялась без токена); обязателен ли токен для сервера: нет (проверено в Postman: запросы без Authorization вернули `201`)
 - Тело: `{ "email": "...", "password": "***", "passwordRepeat": "***", "securityAnswer": "***", "securityQuestion": { "id": 1, "question": "...", ... } }`
@@ -52,17 +53,20 @@
 - Ответ: `{ "status": "success", "data": { role: "customer", lastLoginIp, profileImage, ... } }`
 
 ### 0б. Сохранение ответа на секретный вопрос
+
 - Метод + URL: `POST /api/SecurityAnswers/`
 - Тело: `{ "answer": "***", "SecurityQuestionId": 1, "UserId": 26 }`
 - Статус: `201 Created`
 - Ответ: `{ "status": "success", "data": { id, UserId, answer (в ответе приходит значение, похожее на хеш), ... } }`
 
 **Наблюдения**
+
 - Двухшаговая регистрация: `UserId` во втором запросе берётся из первого (проверить по `data.id`).
 - На сервер уходит поле `passwordRepeat`.
 - Номера выдаются в основном подряд (UserId 25 → 26, bid 6 → 7); подробности в экспериментах ниже.
 
 **Эксперименты (проверено в Postman, до пересоздания базы 16.10.2026)**
+
 - Успешная регистрация (`qa.third@test.com`, тело: `email`, `password`, `passwordRepeat`, `securityQuestion {id, question}`, `securityAnswer`; без Authorization): `201 Created`, `Content-Type: application/json; charset=utf-8`, `status: "success"`, `data`: `username`, `role` (`customer`), `deluxeToken`, `lastLoginIp`, `profileImage`, `isActive` (`true`), `id` (27), `email`, `createdAt`, `updatedAt`, `deletedAt`. Поля с паролем в ответе нет
 - Минимального тела достаточно: `createdAt` и `updatedAt` внутри `securityQuestion` не нужны (обязательность каждого поля по отдельности не проверялась)
 - Логин новым пользователем (`qa.third@test.com`, тот же пароль): `200 OK`, `authentication.bid` = 8
@@ -80,6 +84,7 @@
 **Действие в UI:** Account → Login → ввод email и пароля → Log in
 
 **Запрос**
+
 - Метод + URL: `POST /rest/user/login`
 - Authorization в запросе браузера: нет (токена ещё нет)
 - Обязателен ли токен для сервера: нет (проверено в Postman: запрос без Authorization и без cookie вернул `200` и токен)
@@ -90,16 +95,24 @@
   ```
 
 **Ответ**
+
 - Статус: `200 OK`
 - Тело:
   ```json
-  { "authentication": { "token": "eyJ...<сокращено>", "bid": 6, "umail": "qa.playwright@test.com" } }
+  {
+    "authentication": {
+      "token": "eyJ...<сокращено>",
+      "bid": 6,
+      "umail": "qa.playwright@test.com"
+    }
+  }
   ```
 - Ключевые поля: `authentication.token`, `authentication.bid` (id корзины), `authentication.umail`
 - Для аккаунта B: тот же запрос, `bid` = 7
 - В Postman ответ совпал с ответом браузера (те же поля)
 
 **Токен (проверено)**
+
 - Формат: JWT, `alg: RS256` (подпись асимметричная), `typ: JWT`
 - Хранится: Local Storage (ключ `token`) и cookie `token`
 - Передаётся: `Authorization: Bearer <JWT>` + cookie `token`
@@ -108,9 +121,11 @@
 - Поля `exp` (срок жизни) в payload не видно
 
 **Наблюдения**
+
 - В payload лежат чувствительные поля, в частности значение `password` (по формату похоже на хеш) и `totpSecret`. Токен читается без ключа, потенциальный дефект.
 
 **Эксперименты (проверено в Postman, до пересоздания базы 16.10.2026)**
+
 - Неверный пароль (email верный): статус `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, тело — простой текст `Invalid email or password.` (не JSON), поля `authentication` и токена нет
 - Несуществующий email: результат идентичен случаю с неверным паролем (тот же статус и то же сообщение), по ответу нельзя определить, зарегистрирован ли email
 - Пустые значения (`email: ""`, `password: ""`; проверено вместе и по отдельности): результат во всех трёх случаях одинаковый: `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, тело `Invalid email or password.`. Отдельной валидации пустых полей (например, `400`) нет
@@ -124,12 +139,14 @@
 **Действие в UI:** открытие главной страницы, поиск по названию
 
 **Запрос**
+
 - Метод + URL: `GET /rest/products/search?q=`
 - Параметр: `q` (query-строка); при загрузке страницы пустой
 - Authorization в запросе браузера: да (`Bearer`); обязателен ли для сервера: нет (проверено в Postman: запрос без токена вернул `200` и тот же результат, что с токеном)
 - Тело: нет (GET)
 
 **Ответ**
+
 - Статус: `200 OK`
 - Структура: `{ "status": "success", "data": [ {товар}, ... ] }`
 - Поля товара: `id`, `name`, `description`, `price`, `deluxePrice`, `image`, `createdAt`, `updatedAt`, `deletedAt`
@@ -137,12 +154,14 @@
 - При `q=` возвращается весь каталог: 46 товаров (подтверждено 14.10 и 16.10.2026)
 
 **Наблюдения**
+
 - UI запрашивает каталог один раз при загрузке; поиск `apple` и `banana` в строке сайта нового запроса к `/rest/products/search` не вызвал (гипотеза: фильтрация на стороне браузера).
 - Адрес `/#/search?q=...` — внутренний маршрут фронтенда, на сервер не уходит.
 - `description` содержит HTML-разметку.
 - При поиске `Apple Juice` в UI подгружалась картинка `pineapple_juice.png`: подтверждено, что поиск идёт по вхождению подстроки без учёта регистра (`apple` внутри `Pineapple`).
 
 **Эксперименты (проверено в Postman, после пересоздания базы 16.10.2026)**
+
 - `q=apple` (без токена и с токеном): `200 OK`, `Content-Type: application/json; charset=utf-8`, `data` = 3 товара: Apple Juice (id 1), Apple Pomace (id 24), Pineapple Juice (id 47). Поиск идёт по вхождению подстроки (`apple` внутри `Pineapple`), результаты в алфавитном порядке по названию
 - `q=APPLE`: тот же результат, регистр не важен
 - `q=monkeys`: найден Banana Juice (id 6), слово есть только в описании: сервер ищет не только по названию, но и по описанию
@@ -159,6 +178,7 @@
 **Действие в UI:** кнопка Add to Basket на карточке товара
 
 ### 3а. Добавление нового товара
+
 - Метод + URL: `POST /api/BasketItems/`
 - Authorization в запросе браузера: да (`Bearer`); обязателен ли для сервера: да (проверено в Postman: без заголовка `401`)
 - Тело: `{ "ProductId": 53, "BasketId": "6", "quantity": 1 }`
@@ -167,17 +187,20 @@
 - Ключевые поля: `data.id` (id строки корзины), `data.ProductId`, `data.BasketId`, `data.quantity`
 
 ### 3б. Повторное добавление того же товара (UI отправляет три запроса)
+
 1. `GET /api/BasketItems/20`: чтение текущей строки, статус `200`, в ответе `data` с `ProductId`, `BasketId`, `id`. Токен для этого запроса обязателен (проверено ниже на строке 10).
 2. `PUT /api/BasketItems/20`: тело `{ "quantity": 5 }`, статус `200`, в ответе `data` с `ProductId`, `BasketId`, `id`. Authorization в запросе браузера: да (`Bearer`).
 3. `GET /api/Products/53?d=<дата>`: данные товара для интерфейса, в flow не нужен.
 
 **Наблюдения**
+
 - Повторное добавление в UI не создаёт новую строку: id записи прежний, количество обновляется через PUT.
 - В PUT передаётся итоговое количество, а не приращение.
 - В URL PUT стоит id строки корзины. Это тот же тип объекта-идентификатора, что `bid` в шаге 4: кандидат на проверку авторизации (чужая строка).
 - `BasketId` в ответе POST приходит строкой (`"6"`), когда в запросе отправлена строка (так делает UI), в ответах GET и PUT числом (`6`); `ProductId` всегда числом. Тип `BasketId` в ответе POST повторяет тип из запроса (см. эксперимент от 19.10.2026).
 
 **Эксперименты (проверено в Postman, после пересоздания базы 16.10.2026; токен аккаунта A, если не указано иное)**
+
 - `POST /api/BasketItems/` с телом `{"ProductId": 1, "BasketId": "6", "quantity": 1}`: `200 OK`, `Content-Type: application/json; charset=utf-8`, `data`: `id` = 9 (id строки корзины), `ProductId` = 1, `BasketId` = `"6"` (строка), `quantity` = 1, `createdAt`, `updatedAt`
 - `PUT /api/BasketItems/9` с телом `{"quantity": 3}`: `200 OK`, `data`: `ProductId` = 1, `BasketId` = 6 (число), `id` = 9, `quantity` = 3, `updatedAt` изменился, `createdAt` прежний
 - Расхождение типов подтверждено: `BasketId` в ответе POST — строка, в ответе PUT и в корзине — число
@@ -206,25 +229,30 @@
 **Действие в UI:** открыть корзину
 
 **Запрос**
+
 - Метод + URL: `GET /rest/basket/{bid}` (пример: `/rest/basket/6`)
 - Authorization в запросе браузера: да (`Bearer`); обязателен ли для сервера: да (проверено в Postman: без заголовка `401`)
 - Тело: нет
 
 **Ответ**
+
 - Статус: `200 OK`
 - Структура: `{ "status": "success", "data": { id, coupon, UserId, createdAt, updatedAt, Products: [ ... ] } }`
 - Товар в `Products`: `id`, `name`, `price`, `deluxePrice`, ..., `BasketItem { ProductId, BasketId, id, quantity }`
 - Ключевые поля для проверки: `Products[].id`, `Products[].BasketItem.quantity`
 
 **Связи между шагами**
+
 - `{bid}` ← `authentication.bid` из шага 1
 - `Products[].id` сверяем с `ProductId`, отправленным в шаге 3
 
 **Наблюдения**
+
 - В URL идёт id корзины (`bid`), а не `UserId` (в ответе `UserId: 25`, корзина: `6`).
 - Приложение перечитывает корзину после каждого добавления.
 
 **Эксперименты (проверено в Postman, после пересоздания базы 16.10.2026; токен аккаунта A, если не указано иное)**
+
 - `GET /rest/basket/6` после добавления товара: `200 OK`, `data.id` = 6, `data.UserId` = 25, `data.coupon` = `null`, `data.Products` = 1 товар (Apple Juice, `id` 1) с вложенным `BasketItem`: `ProductId` = 1, `BasketId` = 6, `id` = 9 (совпадает с `data.id` из ответа POST), `quantity` = 1
 - `GET /rest/basket/6` после `PUT quantity = 3`: тот же товар, `BasketItem.quantity` = 3, `BasketItem.updatedAt` обновился
 - `GET /rest/basket/6` без заголовка Authorization: `401 Unauthorized`, `Content-Type: text/html; charset=utf-8`, тело — HTML-страница ошибки с заголовком `UnauthorizedError: No Authorization header was found`
@@ -239,25 +267,30 @@
 **Действие в UI:** корзина → кнопка удаления у товара
 
 **Запрос**
+
 - Метод + URL: `DELETE /api/BasketItems/{id}` (пример: `/api/BasketItems/17`)
 - Authorization в запросе браузера: да (`Bearer`); обязателен ли для сервера: да (проверено в Postman: без заголовка `401`)
 - Тело: нет
 
 **Ответ**
+
 - Статус: `200 OK` (не `204`)
 - `Content-Type: application/json; charset=utf-8`
 - Тело: `{ "status": "success", "data": {} }`
 
 **Связи между шагами**
+
 - `{id}` в URL это id строки корзины (`data.id` из ответа POST в шаге 3), а не `bid`: в примере `id` = 17, корзина аккаунта A = 6.
 - Для teardown `data.id` нужно сохранять при добавлении товара.
 
 **Наблюдения**
+
 - После удаления UI перечитывает корзину: `GET /rest/basket/6` возвращает `200`, `data.id` = 6, `data.UserId` = 25. Повторный запрос браузера вернул `304 Not Modified` (условный запрос с `ETag`, кеш браузера). Встроенный `fetch` в Node кеш не ведёт, поэтому в тестах `304` ожидать не нужно.
 - Тело ответа DELETE пустое по смыслу (`data: {}`), поэтому факт удаления проверяется только повторным чтением корзины.
 - Ошибка `404` приходит в JSON, а ошибки `401` и `500` в HTML: формат ответов об ошибках непоследователен.
 
 **Эксперименты (проверено в Postman, 19.10.2026; токен аккаунта A, если не указано иное; числовые значения относятся к текущей базе)**
+
 - `DELETE /api/BasketItems/{id}` своей строки: `200 OK`, `Content-Type: application/json; charset=utf-8`, тело `{ "status": "success", "data": {} }`
 - `DELETE` той же строки повторно: `404 Not Found`, тело `{ "message": "Not Found", "errors": [] }` (JSON; `Content-Type` не записан). Для teardown: повторное удаление не должно ронять очистку, но `401` и `500` пропускать нельзя
 - `DELETE /api/BasketItems/99999` (несуществующий id): `404 Not Found`, тело `{ "message": "Not Found", "errors": [] }`, идентично повторному удалению
@@ -302,4 +335,3 @@
 - Слабый пароль при регистрации
 - Связь `UserId` в запросе `/api/SecurityAnswers/` с `data.id` из ответа `/api/Users/`
 - Чтение корзины B после `DELETE` её строки токеном A (подтверждение дефекта 21)
-
