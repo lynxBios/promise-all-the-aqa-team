@@ -12,7 +12,7 @@ export class BasketPage {
   }
 
   getProductRow(productName) {
-    return this.page.getByText(productName, { exact: true }).locator('..');
+    return this.page.getByRole('row').filter({ hasText: productName });
   }
 
   async removeProduct(productName) {
