@@ -3,6 +3,7 @@ import globals from 'globals';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig([
+  { ignores: ['playwright-report/', 'test-results/'] },
   {
     files: ['**/*.{js,mjs,cjs}'],
     plugins: { js },
