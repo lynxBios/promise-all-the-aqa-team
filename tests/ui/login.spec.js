@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { INVALID_PASSWORD, TEST_USER } from '../config/testData.js';
-import { LoginPage } from '../pages/LoginPage.js';
-import { applicationSetup } from '../utils/applicationSetup.js';
+import { INVALID_PASSWORD, TEST_USER } from '../../config/testData.js';
+import { LoginPage } from '../../pages/LoginPage.js';
+import { applicationSetup } from '../../src/utils/applicationSetup.js';
 
 const LOGIN_TEST_CASES = [
   {
