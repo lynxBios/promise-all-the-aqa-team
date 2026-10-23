@@ -8,7 +8,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint src/**/*.js",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:ui": "playwright test --project=ui",
+    "test:api": "playwright test --project=api"
   },
   "repository": {
     "type": "git",
