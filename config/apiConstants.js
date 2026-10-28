@@ -1,0 +1,22 @@
+export const HTTP_STATUS = {
+  OK: 200,
+  UNAUTHORIZED: 401,
+  NOT_FOUND: 404,
+  INTERNAL_SERVER_ERROR: 500,
+};
+
+export const CONTENT_TYPE = {
+  JSON: 'application/json',
+  HTML: 'text/html',
+};
+
+export const PAGINATION = {
+  FIRST_PAGE: 1,
+  MAX_PAGES: 10,
+};
+
+export const USERS_ENDPOINT = '/api/Users/';
+export const SEARCH_ENDPOINT = '/rest/products/search';
+export const CONTENT_TYPE_HEADER = 'content-type';
+export const RESPONSE_STATUS_SUCCESS = 'success';
+export const ERROR_BODY_MAX_LENGTH = 200;

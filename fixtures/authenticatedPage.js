@@ -1,5 +1,5 @@
-import { test as base } from '@playwright/test';
-import { applicationSetup } from '../utils/applicationSetup.js';
+import { test as base, expect } from '@playwright/test';
+import { applicationSetup } from '../src/utils/applicationSetup.js';
 import { LoginPage } from '../pages/LoginPage.js';
 import { TEST_USER } from '../config/testData.js';
 
@@ -10,6 +10,7 @@ export const test = base.extend({
 
     const loginPage = new LoginPage(page);
     await loginPage.login(TEST_USER.email, TEST_USER.password);
+    await expect(page).toHaveURL(/#\/search/);
 
     await use(page);
   },

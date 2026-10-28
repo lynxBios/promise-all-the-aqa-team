@@ -1,8 +1,8 @@
 import { expect } from '@playwright/test';
-import { test } from '../fixtures/authenticatedPage.js';
-import { TEST_USER } from '../config/testData.js';
-import { ProductsPage } from '../pages/ProductsPage.js';
-import { BasketPage } from '../pages/BasketPage.js';
+import { test } from '../../fixtures/authenticatedPage.js';
+import { TEST_USER } from '../../config/testData.js';
+import { ProductsPage } from '../../pages/ProductsPage.js';
+import { BasketPage } from '../../pages/BasketPage.js';
 
 const APPLE_JUICE = 'Apple Juice';
 const APPLE_JUICE_IN_BASKET = 'Apple Juice (1000ml)';
