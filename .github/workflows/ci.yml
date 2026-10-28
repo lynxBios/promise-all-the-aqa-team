@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+env:
+  JUICE_SHOP_IMAGE: bkimminich/juice-shop:v20.2.0
+  JUICE_SHOP_URL: http://localhost:3000
+  READINESS_TIMEOUT_SECONDS: 60
+
+jobs:
+  quality:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run format:check
+
+  api-tests:
+    name: API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      API_BASE_URL: https://reqres.in
+      REQRES_API_KEY: ${{ secrets.REQRES_API_KEY }}
+      TEST_USER_EMAIL: ${{ vars.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      TEST_USER_B_EMAIL: ${{ vars.TEST_USER_B_EMAIL }}
+      TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start Juice Shop
+        run: docker run -d --name juice-shop -p 3000:3000 "$JUICE_SHOP_IMAGE"
+
+      - name: Wait for Juice Shop
+        run: |
+          for second in $(seq 1 "$READINESS_TIMEOUT_SECONDS"); do
+            if curl -sf -o /dev/null "$JUICE_SHOP_URL/rest/products/search?q="; then
+              echo "Juice Shop is ready after ${second}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Juice Shop did not become ready within ${READINESS_TIMEOUT_SECONDS}s"
+          docker logs juice-shop
+          exit 1
+
+      - name: Run API tests
+        run: npm run test:api
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-playwright-report
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ui-tests:
+    name: UI tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_USER_EMAIL: ${{ vars.TEST_USER_EMAIL }}
+      TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+      TEST_USER_B_EMAIL: ${{ vars.TEST_USER_B_EMAIL }}
+      TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start Juice Shop
+        run: docker run -d --name juice-shop -p 3000:3000 "$JUICE_SHOP_IMAGE"
+
+      - name: Wait for Juice Shop
+        run: |
+          for second in $(seq 1 "$READINESS_TIMEOUT_SECONDS"); do
+            if curl -sf -o /dev/null "$JUICE_SHOP_URL/rest/products/search?q="; then
+              echo "Juice Shop is ready after ${second}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Juice Shop did not become ready within ${READINESS_TIMEOUT_SECONDS}s"
+          docker logs juice-shop
+          exit 1
+
+      - name: Run UI tests
+        run: npm run test:ui
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-playwright-report
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
